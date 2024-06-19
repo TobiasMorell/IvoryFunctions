@@ -1,6 +1,8 @@
+using IvoryFunctions.Configuration;
 using IvoryFunctions.Helpers;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace IvoryFunctions.Setup;
 
@@ -8,7 +10,8 @@ internal class QueueFunctionsRegistrator : IFunctionRegistrator<QueueTriggeredFu
 {
     public void Register(
         IEnumerable<QueueTriggeredFunction> functions,
-        IServiceCollection serviceCollection
+        IServiceCollection serviceCollection,
+        IIvoryFunctionsConfigurator configurator
     )
     {
         var addConsumerMethod = serviceCollection
@@ -29,5 +32,10 @@ internal class QueueFunctionsRegistrator : IFunctionRegistrator<QueueTriggeredFu
             // 1st arg is an optional Action<IRegistrationContext,IConsumerConfigurator<T>> configure
             addConsumerTyped.Invoke(serviceCollection, [null]);
         }
+    }
+
+    public void Prepare(IHost host)
+    {
+        
     }
 }

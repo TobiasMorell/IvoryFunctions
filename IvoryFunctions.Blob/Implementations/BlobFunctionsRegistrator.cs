@@ -1,8 +1,10 @@
 using IvoryFunctions.Blob.Abstractions;
 using IvoryFunctions.Blob.Extensions;
 using IvoryFunctions.Blob.Quartz;
+using IvoryFunctions.Configuration;
 using IvoryFunctions.Setup;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace IvoryFunctions.Blob.Implementations;
 
@@ -10,30 +12,38 @@ internal class BlobFunctionsRegistrator : IFunctionRegistrator<BlobTriggeredFunc
 {
     public void Register(
         IEnumerable<BlobTriggeredFunction> functions,
-        IServiceCollection serviceCollection
+        IServiceCollection serviceCollection,
+        IIvoryFunctionsConfigurator configurator
     )
     {
-        var configurator = new FunctionsBlobConfigurator();
-        // TODO: Allow custom configuration
-        // configure(configurator);
-        configurator.UseStaticFiles();
+        var blobConfigurator = configurator.GetInternalConfiguration<IvoryFunctionsBlobConfigurator>();
+        if (blobConfigurator is null)
+        {
+            blobConfigurator = new IvoryFunctionsBlobConfigurator();
+            blobConfigurator.UseStaticFiles();   
+        }
 
-        if (configurator.ScannerType is null)
+        if (blobConfigurator.ScannerType is null)
         {
             throw new InvalidOperationException(
-                $"Invalid configuration of BlobTriggers - no scanner type added. Please add one using {nameof(IFunctionsBlobConfigurator.UseScanner)} or one of the extension methods."
+                $"Invalid configuration of BlobTriggers - no scanner type added. Please add one using {nameof(IIvoryFunctionsBlobConfigurator.UseScanner)} or one of the extension methods."
             );
         }
 
-        if (functions.Any(f => f is BlobTriggeredFunction))
+        if (functions.Any())
         {
             serviceCollection.AddSingleton(
                 typeof(IBlobScannerCache),
-                configurator.ScannerCacheType
+                blobConfigurator.ScannerCacheType
             );
-            serviceCollection.AddSingleton(typeof(IBlobScanner), configurator.ScannerType);
-            serviceCollection.AddSingleton(typeof(IBlobMatcher), configurator.MatcherType);
+            serviceCollection.AddSingleton(typeof(IBlobScanner), blobConfigurator.ScannerType);
+            serviceCollection.AddSingleton(typeof(IBlobMatcher), blobConfigurator.MatcherType);
             serviceCollection.AddHostedService<BlobTriggerFunctionProducer>();
         }
+    }
+
+    public void Prepare(IHost host)
+    {
+        
     }
 }

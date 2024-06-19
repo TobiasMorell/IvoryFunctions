@@ -5,31 +5,31 @@ namespace IvoryFunctions.Blob.Extensions;
 
 public static class IFunctionsBlobConfiguratorExtensions
 {
-    public static IFunctionsBlobConfigurator UseScanner<TScanner>(
-        this IFunctionsBlobConfigurator configurator
+    public static IIvoryFunctionsBlobConfigurator UseScanner<TScanner>(
+        this IIvoryFunctionsBlobConfigurator configurator
     )
     {
         configurator.UseScanner(typeof(TScanner));
         return configurator;
     }
 
-    public static IFunctionsBlobConfigurator UseStaticFiles(
-        this IFunctionsBlobConfigurator configurator
+    public static IIvoryFunctionsBlobConfigurator UseStaticFiles(
+        this IIvoryFunctionsBlobConfigurator configurator
     )
     {
         return configurator.UseScanner<FileBlobScanner>();
     }
 
-    public static IFunctionsBlobConfigurator UseScannerCache<TScannerCache>(
-        this IFunctionsBlobConfigurator configurator
+    public static IIvoryFunctionsBlobConfigurator UseScannerCache<TScannerCache>(
+        this IIvoryFunctionsBlobConfigurator configurator
     )
     {
         configurator.UseScannerCache(typeof(TScannerCache));
         return configurator;
     }
 
-    public static IFunctionsBlobConfigurator UseBlobMatcher<TBlobMatcher>(
-        this IFunctionsBlobConfigurator configurator
+    public static IIvoryFunctionsBlobConfigurator UseBlobMatcher<TBlobMatcher>(
+        this IIvoryFunctionsBlobConfigurator configurator
     )
     {
         configurator.UseBlobMatcher(typeof(TBlobMatcher));

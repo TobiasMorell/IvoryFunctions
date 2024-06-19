@@ -27,17 +27,13 @@ public class InvokeTimerTriggerJobTests : TestWithSetup
             services.AddLogging(x => x.AddXUnit(testOutputHelper));
             services.AddMassTransitTestHarness(mt =>
             {
-                var functions = mt.AddIvoryFunctions(typeof(FunctionWithTimerTrigger));
-                services.AddSingleton(functions);
-
-                mt.UsingInMemory(
-                    (ctx, cfg) =>
+                mt.AddIvoryFunctions(cfg =>
+                {
+                    cfg.ConfigureMassTransit((x, setupFunctions) =>
                     {
-                        ctx.SetupIvoryFunctionsQueueTriggers(cfg, functions);
-
-                        cfg.ConfigureEndpoints(ctx);
-                    }
-                );
+                        x.UsingInMemory(setupFunctions);
+                    });
+                }, typeof(FunctionWithTimerTrigger));
             });
         }) { }
 

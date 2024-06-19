@@ -1,54 +1,50 @@
-﻿using System.Reflection;
-using IvoryFunctions.Extensions;
-using IvoryFunctions.Http;
+﻿using IvoryFunctions.Extensions;
 using MassTransit;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-
-var rabbitmqUsername = Guid.NewGuid().ToString("N");
-var rabbitmqPassword = Guid.NewGuid().ToString("N");
-
-// var rabbitmqContainer = new RabbitMqBuilder()
-//     .WithUsername(rabbitmqUsername)
-//     .WithPassword(rabbitmqPassword)
-//     .Build();
-// await rabbitmqContainer.StartAsync();
+using Testcontainers.RabbitMq;
 
 var host = WebApplication.CreateBuilder(args);
-host.Services.AddControllers().AddApplicationPart(typeof(HttpTriggerAttribute).Assembly).AddControllersAsServices();
 host.Services.AddLogging(x => x.AddConsole());
-host.Services.AddMassTransit(cfg =>
+
+if (args.Contains("--rabbitmq"))
+{
+    var rabbitmqUsername = Guid.NewGuid().ToString("N");
+    var rabbitmqPassword = Guid.NewGuid().ToString("N");
+
+    var rabbitmqContainer = new RabbitMqBuilder()
+        .WithUsername(rabbitmqUsername)
+        .WithPassword(rabbitmqPassword)
+        .Build();
+    await rabbitmqContainer.StartAsync();
+
+    host.Services.AddIvoryFunctions(ifCfg =>
+    {
+        ifCfg.ConfigureMassTransit((bus, configureFunctions) =>
         {
-            var fns = cfg.AddIvoryFunctions();
-
-            /*cfg.UsingRabbitMq(
-                (ctx, busCfg) =>
+            bus.UsingRabbitMq((ctx, busCfg) =>
+            {
+                busCfg.Host(rabbitmqContainer.Hostname, "/", h =>
                 {
-                    busCfg.Host(
-                        rabbitmqContainer.IpAddress,
-                        "/",
-                        h =>
-                        {
-                            h.Username(rabbitmqUsername);
-                            h.Password(rabbitmqPassword);
-                        }
-                    );
-                    ctx.SetupMassTransitFunctionsQueueTriggers(busCfg, fns);
-                }
-            );*/
+                    h.Username(rabbitmqUsername);
+                    h.Password(rabbitmqPassword);
+                });
 
-            cfg.UsingInMemory(
-                (ctx, busCfg) =>
-                {
-                    ctx.SetupIvoryFunctionsQueueTriggers(busCfg, fns);
-                }
-            );
+                configureFunctions(ctx, busCfg);
+            });
         });
+    });
+}
+else
+{
+    host.Services.AddIvoryFunctions();
+}
 
 var app = host.Build();
 
-app.MapControllers();
+app.UseIvoryFunctions();
+
 await app.RunAsync();
 
 //await rabbitmqContainer.StopAsync();

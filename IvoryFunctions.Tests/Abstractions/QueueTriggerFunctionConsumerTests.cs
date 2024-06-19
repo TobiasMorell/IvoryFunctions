@@ -147,14 +147,13 @@ public class QueueTriggerFunctionConsumerTests : TestWithSetup
 
             services.AddMassTransitTestHarness(cfg =>
             {
-                var functions = cfg.AddIvoryFunctions(typeof(TestFunctions.TestFunctions));
-
-                cfg.UsingInMemory(
-                    (context, config) =>
+                cfg.AddIvoryFunctions(cfg =>
+                {
+                    cfg.ConfigureMassTransit((busCfg, setupFunctions) =>
                     {
-                        context.SetupIvoryFunctionsQueueTriggers(config, functions);
-                    }
-                );
+                        busCfg.UsingInMemory(setupFunctions);
+                    });    
+                }, typeof(TestFunctions.TestFunctions));
             });
         }) { }
 }

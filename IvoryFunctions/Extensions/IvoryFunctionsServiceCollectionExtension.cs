@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Reflection;
+using IvoryFunctions.Configuration;
 using IvoryFunctions.Helpers;
 using IvoryFunctions.Setup;
 using IvoryFunctions.Topology;
@@ -10,36 +12,61 @@ namespace IvoryFunctions.Extensions;
 
 public static class IvoryFunctionsServiceCollectionExtension
 {
-    public static IEnumerable<Function> AddIvoryFunctions(
-        this IBusRegistrationConfigurator cfg,
-        params Type[] types
-    )
+    public static IServiceCollection
+        AddIvoryFunctions(this IServiceCollection serviceCollection, params Type[] types) =>
+        AddIvoryFunctions(serviceCollection, null, types);
+
+    public static IServiceCollection AddIvoryFunctions(
+        this IServiceCollection services,
+        Action<IIvoryFunctionsConfigurator>? configure, params Type[] types)
     {
-        var assembly = Assembly.GetCallingAssembly();
+        var assembly = Assembly.GetEntryAssembly();
 
         var functions = TypeHelper.DiscoverFunctions(types.Any() ? types : assembly.GetTypes());
         var functionClasses = functions.Select(c => c.Method.DeclaringType).ToHashSet();
         foreach (var functionClass in functionClasses)
         {
-            cfg.AddSingleton(functionClass);
+            services.AddSingleton(functionClass);
         }
         foreach (var fun in functions)
         {
-            cfg.AddSingleton(fun);
-            cfg.AddSingleton(fun.GetType(), fun);
+            services.AddSingleton(fun);
+            services.AddSingleton(fun.GetType(), fun);
         }
+        
+        var configurator = new IvoryFunctionsConfigurator();
+        services.AddMassTransit(cfg =>
+        {
+            configure?.Invoke(configurator);
+            
+            if (configurator.MassTransit is null)
+            {
+                cfg.UsingInMemory((ctx, busCfg) =>
+                {
+                    ctx.SetupIvoryFunctionsQueueTriggers(busCfg, functions);
+                });
+            }
+            else
+            {
+                configurator.MassTransit(cfg, (ctx, busCfg) =>
+                {
+                    ctx.SetupIvoryFunctionsQueueTriggers(busCfg, functions);
+                });
+            }
+            
+            RegisterFunctions(cfg, functions, assembly, configurator);
+        });
 
-        RegisterFunctions(cfg, functions, assembly);
+        services.AddHostedService<LogFunctionsOnStartupService>();
 
-        cfg.AddHostedService<LogFunctionsOnStartupService>();
-
-        return functions;
+        return services;
     }
 
     private static void RegisterFunctions(
-        IBusRegistrationConfigurator cfg,
+        IServiceCollection cfg,
         Function[] functions,
-        Assembly assembly
+        Assembly assembly,
+        IIvoryFunctionsConfigurator configurator
     )
     {
         var registrators = TypeHelper.DiscoverFunctionRegistrators(assembly);
@@ -58,19 +85,26 @@ public static class IvoryFunctionsServiceCollectionExtension
             }
 
             var registrator = Activator.CreateInstance(registratorType);
+            cfg.AddSingleton(typeof(IFunctionRegistrator), registrator);
             var registerMethod = registratorType.GetMethod(
                 nameof(IFunctionRegistrator<Function>.Register),
-                [typeof(IEnumerable<>).MakeGenericType(functionType), typeof(IServiceCollection)]
+                [typeof(IEnumerable<>).MakeGenericType(functionType), typeof(IServiceCollection), typeof(IIvoryFunctionsConfigurator)]
             );
+            if (registerMethod is null)
+            {
+                throw new UnreachableException(
+                    "Register method not found on registrator - this is a problem in IvoryFunctions. Please report this to us.");
+            }
+            
             var typedFns = typeof(Enumerable)
                 .GetMethod(nameof(Enumerable.Cast))!
                 .MakeGenericMethod(functionType)
                 .Invoke(null, [fns]);
-            registerMethod.Invoke(registrator, [typedFns, cfg]);
+            registerMethod.Invoke(registrator, [typedFns, cfg, configurator]);
         }
     }
 
-    public static void SetupIvoryFunctionsQueueTriggers<TConfig>(
+    internal static void SetupIvoryFunctionsQueueTriggers<TConfig>(
         this IBusRegistrationContext context,
         IBusFactoryConfigurator<TConfig> busConfigurator,
         IEnumerable<Function> functions
